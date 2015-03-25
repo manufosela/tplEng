@@ -1,4 +1,7 @@
-Template Engine bases in requireJS to render html templates asociated with a javascript file
+tplEng
+======
+
+tplEng is a Javascript Template Engine bases in requireJS to render html templates asociated with a javascript file
 
 Requeriments:
 -------------
