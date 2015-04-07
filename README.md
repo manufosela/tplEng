@@ -1,7 +1,7 @@
 tplEng
 ======
 
-tplEng is a Javascript Template Engine bases in requireJS to render html templates asociated with a javascript file
+tplEng is a Javascript Template Engine to render html templates asociated with a javascript file. It uses jQuery or Zepto.
 
 Requeriments:
 -------------
