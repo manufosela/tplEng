@@ -4,6 +4,7 @@
   applyTplIntoDOM( domID, tplGroup, otherparams )
   loadTpl( String nameTpl, String domId, Bool nocache )
   searchTpl( String html )
+  include( path, callback )
 */
 
 TplEng = (function (){
@@ -12,12 +13,8 @@ TplEng = (function (){
     args = args || {};
     this.path = args.path || "./";
     this.popup = new Popup() || false;
-    require.config( { 
-      paths:{ 
-        path: this.path,
-        templatePath: this.path 
-      } 
-    });
+    this.pathjs = this.path + args.pathjs;
+    this.pathtpl = this.path + args.pathtpl;
   };
 
   TplEng.prototype.applyHTMLTpl = function( objArgs ) {
@@ -36,7 +33,7 @@ TplEng = (function (){
           }
           return add;
         };
-    while( match = re1.exec( html ) ) {
+    while( !!( match = re1.exec( html ) ) ) {
       add( html.slice( cursor, match.index ) )( match[1], true );
       cursor = match.index + match[0].length;
     }
@@ -51,12 +48,14 @@ TplEng = (function (){
         html = objArgs.html || "<!-- ARG HTML EMPTY -->",
         params = objArgs.params || {},
         nocache = objArgs.nocache || false,
+        callback = objArgs.callback || function(){},
         _this = this;
       this.applyHTMLTpl( { html:html, params:params, callback: function( result ){
           var doc = document.getElementById( domID );
           if ( doc !== null ) {
             doc.innerHTML = result; 
             _this.searchTpl( { html:result, domid:domID, nocache:nocache } );
+            callback();
           } else {
             if ( _this.debug ) { console.error( "domid " + domID + " no encontrado" ); }
           }
@@ -64,7 +63,7 @@ TplEng = (function (){
       });
   };
   TplEng.prototype.loadTpl = function( objArgs ) { 
-    if ( require && typeof objArgs.tplname != "undefined" && typeof objArgs.domid != "undefined" ) {
+    if ( typeof objArgs.tplname != "undefined" && typeof objArgs.domid != "undefined" ) {
       //document.getElementById( objArgs.domid ).innerHTML = "<style type='text/css'>@keyframes rotateSpinnerPopup { 0% { transform: perspective(120px) rotateX(0deg) rotateY(0deg); } 50% { transform: perspective(120px) rotateX(-180deg) rotateY(0deg); } 100% { transform: perspective(120px) rotateX(-180deg) rotateY(-180deg); } } @keyframes backgroundSpinnerPopup { 0% { background-color: #F60; } 50% { background-color: #000; } 100% { background-color: #FFF; } }</style><div>Cargando...</div><div style='text-align: center; margin: 10px auto; width: 60px; height: 60px; animation: rotateSpinnerPopup 1.4s infinite ease-in-out, backgroundSpinnerPopup 1.4s infinite ease-in-out alternate;'></div>";
       var layer = ( objArgs.domid !== null)?document.getElementById( objArgs.domid ):null;
       if ( layer !== null ) { layer.innerHTML = "Cargando..."; }
@@ -74,21 +73,24 @@ TplEng = (function (){
           nocache = objArgs.nocache || false,
           callback = objArgs.callback || function(){},
           _this = this, 
-          requireError = function( err ){ console.warn( err ); },
-          requireCallback2 = function(){ 
-            callback(); 
+          includeCallback2 = function(){ 
+            //var sc =$(document.createElement('script')).attr("type","text/javascript").text( js ),
             var layer = ( domid !== null )?document.getElementById( domid ):null;
-            if ( layer !== null ) { layer.style.display = 'block'; }
+            callback();
+            if ( layer !== null ) { 
+              //$( "#"+domid ).append( sc ); 
+              layer.style.display = 'block'; 
+            }
           },
-          requireCallback = function( html ){
-            _this.applyTplIntoDOM( { domid: domid, html:html, params:params } );
-            require( ['tpljs/'+tplname+'.js?a=1&'+nocacheStr], requireCallback2, requireError );
+          includeCallback = function( html ){
+            _this.applyTplIntoDOM( { domid: domid, html:html, params:params } );  
+            _this.include( _this.pathjs + tplname+'.js?'+nocacheStr, includeCallback2 );
           };
       nocacheStr = ( nocache === true )?"?"+new Date().getTime():"";
       //document.getElementById( domid ).style.display = 'none';
-      require( ['text!templatePath/tpl/'+tplname+'.html'+nocacheStr], requireCallback, requireError );
+      this.include( this.pathtpl + tplname+'.html'+nocacheStr, includeCallback );
     } else {
-      if ( console ) { console.error( "RequireJS is not loaded" ); }
+      if ( console ) { console.error( "Error in loadTpl arguments" ); }
     }
   };
   TplEng.prototype.searchTpl = function( objArgs ) {
@@ -97,16 +99,35 @@ TplEng = (function (){
         nocache = objArgs.nocache,
         nocacheStr = ( nocache === true )?"?"+new Date().getTime():"",
         regexp = /\{\{\!(\w*)\}\}/g, match, s, n, t,
-        requireCallback = function( h ) {
+        _this=this,
+        includeCallback = function( h ) {
           t = document.getElementById( domid ).innerHTML;
           document.getElementById( domid ).innerHTML = t.replace( s, h );
-          require( ['./tpljs/'+n+'.js'+nocacheStr] );
-        },
-        requireError = function( err ){ console.warn( err ); };
-    while( match = regexp.exec( html ) ) {
+          include( _this.pathjs + n + '.js'+nocacheStr );
+        };
+    while( !!( match = regexp.exec( html ) ) ) {
       s = match[0]; n = match[1];
-      require( ['text!tpl/'+n+'.html'+nocacheStr], requireCallback, requireError );
+      this.include( _this.pathtpl + n + '.html'+nocacheStr, includeCallback );
     }
+  };
+  TplEng.prototype.include = function( path, callback ) {
+    callback = callback || function() { };
+    var url = document.location.protocol+"//"+document.location.host+path,
+        request,
+        type = ( !!~url.split( "?" )[0].split( "#" )[0].search(/.js$/) )?"script":"text";
+    if ( path.length > 0 ) {    
+      request = $.ajax({
+        dataType: type,
+        url: url,
+        data:{}
+      }).complete(function ( data ) {
+        var resp = data.responseText;
+        callback( resp, type );
+      });
+    } else {
+      return { code:1, msg:"<h3>ERROR LOADING INCLUDE<h3>" };
+    }
+    return { code:0,msg:"PROCESSING" };
   };
 
   return TplEng;
